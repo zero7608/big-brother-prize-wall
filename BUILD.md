@@ -25,6 +25,7 @@ can skip it entirely and wire the reader straight to the Pi's header instead.
 |---|---|---|
 | PN532 NFC/RFID module (V3, with DIP switches) | The switch block is what selects SPI vs. I2C mode; boards without it can't do both wiring options in this guide | [Search Amazon](https://www.amazon.com/s?k=PN532+NFC+RFID+module+V3) |
 | MIFARE Classic 1K key fobs or cards, 13.56MHz | One per guest, plus the ones you're rigging | [Search Amazon](https://www.amazon.com/s?k=RFID+key+fob+13.56mhz+mifare) |
+| MIFARE Classic 1K adhesive RFID stickers, 13.56MHz | Same tag electronics as the fobs above, but stuck onto something of your own instead: the original build laser-engraved a wooden key per guest and stuck a tag to the side of each one | [Search Amazon](https://www.amazon.com/s?k=RFID+sticker+13.56mhz+mifare+adhesive) |
 | 30mm arcade push button, momentary, normally-open | Any generic Sanwa/Zippy-style clone works; get the plain (non-illuminated) version unless you want to wire an LED too | [Search Amazon](https://www.amazon.com/s?k=30mm+arcade+push+button) |
 | Jumper wires (female-female for header pins, male ends for breadboarding the reader) | | [Search Amazon](https://www.amazon.com/s?k=dupont+jumper+wires) |
 
