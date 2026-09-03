@@ -1,0 +1,154 @@
+{
+  "_comment": "Edit prizes/rigged_tags here. Run 'python3 scan_uid.py' to find a tag's UID.",
+  "display": {
+    "fullscreen": true,
+    "width": 1280,
+    "height": 720,
+    "title": "Big Brother Memory Wall",
+    "hide_mouse": true,
+    "background": "#04101c",
+    "accent": "#2fd0ff",
+    "font": "Big Brother.ttf"
+  },
+  "theme": {
+    "house_name": "BIG BROTHER",
+    "idle_line": "PLACE YOUR KEY",
+    "spin_line": "BIG BROTHER IS DECIDING",
+    "reveal_line": "BIG BROTHER HAS SPOKEN",
+    "exhausted_line": "THE HOUSE IS EMPTY",
+    "welcome_line": "WELCOME TO THE PRIZE SHACK, {name}",
+    "button_line": "PUSH THE BUTTON TO BEGIN!",
+    "default_guest": "HOUSEGUEST",
+    "show_eye": true,
+    "shuffle_wall": false,
+    "frame_colour": "#246f80",
+    "background_style": "timetrip",
+    "warp_streaks": 20,
+    "warp_seam": true,
+    "waves": true,
+    "wave_speed": 1.0,
+    "wave_detail": 5,
+    "wave_quality": 1,
+    "wave_chroma": true,
+    "captions": true
+  },
+  "spin": {
+    "seconds": 10.0,
+    "min_ticks": 72,
+    "start_sound": "spin_start.wav",
+    "tick_sound": "tick.wav",
+    "loop_sound": null,
+    "armed_sound": "armed.wav",
+    "bell_sound": "bell.wav",
+    "land_pause_seconds": 0.5,
+    "reveal_sound": "reveal.wav",
+    "reveal_hold_seconds": 6.0,
+    "idle_music": null,
+    "reveal_tail_seconds": 2.0,
+    "_reveal_note": "the reveal holds for reveal_hold_seconds or until the spoken line finishes plus reveal_tail_seconds, whichever is longer"
+  },
+  "behaviour": {
+    "once_per_night": true,
+    "reserve_rigged_prizes": true,
+    "rescan_lockout_seconds": 3.0,
+    "armed_timeout_seconds": 45,
+    "state_file": "night_state.json",
+    "log_file": "scans.log"
+  },
+  "_prize_order": "Order here IS the position on the wall, left to right, top to bottom. The two rigged prizes are placed so they share neither a row nor a column.",
+  "prizes": [
+    {
+      "id": "butfirst",
+      "name": "But First",
+      "image": "butfirst.png",
+      "sound": "prize_butfirst.wav",
+      "weight": 1
+    },
+    {
+      "id": "blockbuster",
+      "name": "Blockbuster",
+      "image": "blockbuster.png",
+      "sound": "prize_blockbuster.wav",
+      "weight": 0
+    },
+    {
+      "id": "diary",
+      "name": "Diary Room",
+      "image": "diary.png",
+      "sound": "prize_diary.wav",
+      "weight": 1
+    },
+    {
+      "id": "expect",
+      "name": "Expect The Unexpected",
+      "image": "expect.png",
+      "sound": "prize_expect.wav",
+      "weight": 1
+    },
+    {
+      "id": "hoh",
+      "name": "HOH",
+      "image": "hoh.png",
+      "sound": "prize_hoh.wav",
+      "weight": 1
+    },
+    {
+      "id": "slop",
+      "name": "Slop",
+      "image": "slop.png",
+      "sound": "prize_slop.wav",
+      "weight": 1,
+      "opener": "badnews"
+    },
+    {
+      "id": "comics",
+      "name": "BB Comics",
+      "image": "comics.png",
+      "sound": "prize_comics.wav",
+      "weight": 0
+    },
+    {
+      "id": "veto",
+      "name": "Power Of Veto",
+      "image": "veto.png",
+      "sound": "prize_veto.wav",
+      "weight": 1
+    },
+    {
+      "id": "zing",
+      "name": "Zingbot",
+      "image": "zing.png",
+      "sound": "prize_zing.wav",
+      "weight": 1,
+      "opener": "none"
+    }
+  ],
+  "key_names": {
+    "04:A1:B2:C3": "Alex",
+    "04:D4:E5:F6": "Jordan"
+  },
+  "button": {
+    "pin": 17,
+    "pull_up": true,
+    "bounce_seconds": 0.05,
+    "type": "wireless",
+    "_type_note": "wireless = the button is on the ESP32; gpio = wired to this Pi. Ignored unless reader.type is bluetooth."
+  },
+  "rigged_tags": {
+    "04:A1:B2:C3": "blockbuster",
+    "04:D4:E5:F6": "comics"
+  },
+  "reader": {
+    "type": "pn532",
+    "_type_note": "pn532 = wired to this Pi over SPI. ble = an ESP32-C6 or nRF52840 over Bluetooth LE, which is what current chips support. bluetooth = Bluetooth Classic on rfcomm, which only the older Xtensa ESP32 can do.",
+    "port": "/dev/rfcomm0",
+    "baud": 115200,
+    "reconnect_seconds": 3.0,
+    "cs_pin": "D8",
+    "poll_interval": 0.15,
+    "read_timeout": 0.5,
+    "name": "PrizeShack",
+    "address": "",
+    "_address_note": "leave empty to find the unit by name, or paste its MAC to skip the scan"
+  }
+}

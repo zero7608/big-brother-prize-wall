@@ -1,0 +1,9 @@
+pygame>=2.5
+# Reader libraries: only needed on the Raspberry Pi, not for --simulate.
+adafruit-circuitpython-pn532>=2.3
+adafruit-blinka>=8.0
+numpy>=1.21
+
+# Wireless reader: only needed if reader.type is "bluetooth".
+pyserial>=3.5        # Bluetooth Classic / USB serial
+bleak>=0.21          # Bluetooth LE, for an ESP32-C6 or nRF52840

@@ -1,0 +1,28 @@
+# Per-guest data: real names and RFID UIDs, never committed
+# (the Android build ships its config.json as a bundled asset instead;
+# edit its key_names/rigged_tags directly before building your own APK)
+pi/config.json
+
+# Runtime state
+pi/night_state.json
+pi/scans.log
+pi/wall.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# PlatformIO build output
+firmware/.pio/
+
+# Android / Gradle
+android/.gradle/
+android/local.properties
+android/.idea/
+android/.kotlin/
+android/**/build/
+android/**/.cxx/
+*.iml
+.DS_Store
