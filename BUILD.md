@@ -45,7 +45,7 @@ Pick one board:
 | Part | Notes | Where to look |
 |---|---|---|
 | ESP32-C6 DevKit | Best all-around choice: BLE now, WiFi later if BLE proves flaky in a crowded room | [Search Amazon](https://www.amazon.com/s?k=esp32-c6+devkit) |
-| Nice!Nano V2 (nRF52840) clone | Smaller, built-in LiPo charging, good if you want it battery-powered and tucked out of sight | [Search Amazon](https://www.amazon.com/s?k=nice+nano+v2+nrf52840) |
+| Nice!Nano V2 (nRF52840) clone | Smaller, built-in LiPo charging, good if you want it battery-powered and tucked out of sight. Sold under a pile of different names, the build this repo came from used one labeled "nRF52840 SuperMini," which is fine: same chip, same pinout quirks, same firmware | [Search Amazon](https://www.amazon.com/s?k=nrf52840+super+mini) |
 | LiPo battery, 500-1000mAh with JST connector (Nice!Nano only) | Verify the charging circuit before connecting one, see `pi/README.md` | [Search Amazon](https://www.amazon.com/s?k=lipo+battery+jst+500mah) |
 
 ### Android build only
