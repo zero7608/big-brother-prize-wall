@@ -26,3 +26,33 @@ reader isn't found, are in `../pi/README.md` section 1d.
 
 No prebuilt binaries are shipped in this repository; build output goes to
 `.pio/`, which is gitignored.
+
+## Over the air
+
+The `prize_reader_ble` firmware carries the Nordic DFU service on the
+Nice!Nano, so once it is on the board it can be updated without a cable: build
+the package (`pio run -e nicenano` writes `firmware.zip` under
+`.pio/build/nicenano/`), open **nRF Connect** on a phone, connect to
+`PrizeShack`, tap **DFU**, and pick the zip. The host must not be connected to
+the unit at the same time.
+
+## Robustness notes
+
+The nRF52 build includes fixes that only showed up on a real Fire TV and a
+real night of use:
+
+- Each line goes out in a single notification with its newline, since Android 7
+  can overwrite a shared characteristic value when two notifications land
+  together.
+- The UART service is registered before DFU. The reverse order moves the UART
+  handles and a host that cached the old layout drops the unit every ten
+  seconds.
+- A stuck PN532 is recovered by clocking the I2C bus free and retrying every
+  three seconds.
+- A software timer restarts the board if the main loop stalls for five
+  seconds, and the unit reports `E restarted after a stall` once reconnected.
+  It is a timer, not the hardware watchdog, so it cannot interrupt an update.
+
+Never open the serial port while a USB flash is running; a flash interrupted
+that way can leave the board in its bootloader. Reflashing with
+`adafruit-nrfutil dfu serial` recovers it.

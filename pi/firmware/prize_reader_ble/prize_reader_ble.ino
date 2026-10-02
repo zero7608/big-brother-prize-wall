@@ -109,6 +109,16 @@ static const uint16_t READ_TIMEOUT_MS = 60; // keeps the button responsive
 static const uint32_t DEBOUNCE_MS = 40;
 static const uint32_t HEARTBEAT_MS = 1000;
 
+// How often to try again to start a PN532 that did not answer.
+static const uint32_t RESTART_RETRY_MS = 3000;
+
+// How long loop() may go without coming round before the board restarts.
+// The nRF52 Wire library waits on the bus with no timeout, and the PN532 is
+// allowed to hold the clock low while it is busy; a confused one holds it for
+// ever, and loop() stops dead with the radio still up, so the unit connects
+// and says nothing. A restart gets it going again without a power cycle.
+static const uint32_t STALL_MS = 5000;
+
 // Nordic UART Service. The Pi looks for exactly these.
 #define NUS_SERVICE "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 #define NUS_RX      "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
@@ -122,6 +132,8 @@ Adafruit_PN532 nfc(-1, -1, &Wire);
 // of range. It now carries on, advertises, and says what is wrong.
 static bool readerOk = false;
 static uint32_t lastComplaint = 0;
+static uint32_t lastRestartTry = 0;
+static volatile uint32_t loopAlive = 0;
 
 static uint32_t lastTagSent = 0;
 static uint32_t lastAnything = 0;
@@ -134,6 +146,9 @@ static bool announced = false;
 #if defined(BOARD_NRF52)
 
 BLEUart bleuart;
+// Over-the-air updates: the unit can be reflashed from nRF Connect on a phone,
+// with the zip from build/, instead of over USB.
+BLEDfu bledfu;
 static bool linkUp() { return Bluefruit.connected() && bleuart.notifyEnabled(); }
 static void sendLine(const char *line) {
   writeChunked(line);
@@ -142,7 +157,12 @@ static void startBle() {
   Bluefruit.begin();
   Bluefruit.setName(UNIT_NAME);
   Bluefruit.setTxPower(4);
+  // The UART service first and the DFU service after it. The other way round
+  // moves the UART's handles, and a Fire TV that remembers the old layout
+  // subscribes to a handle that is no longer the UART: it connects, hears
+  // nothing, and drops the unit every ten seconds.
   bleuart.begin();
+  bledfu.begin();
   Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
   Bluefruit.Advertising.addService(bleuart);
   Bluefruit.ScanResponse.addName();
@@ -207,6 +227,21 @@ static void writeChunk(const uint8_t *data, size_t len) {
 
 static void writeChunked(const char *line) {
   size_t len = strlen(line);
+
+  // A line that fits goes out whole, newline included, in one notification.
+  // Sent as its own one-byte notification, the newline was the part that went
+  // missing: Android 7 hands the app the characteristic's shared value, so
+  // when two notifications land together the second overwrites the first
+  // before it is read, and on a Fire TV two lines ran together as
+  // "T 04:AA:BB:CCT 04:AA:BB:CC" and matched no key.
+  if (len + 1 <= BLE_CHUNK) {
+    uint8_t whole[BLE_CHUNK];
+    memcpy(whole, line, len);
+    whole[len] = '\n';
+    writeChunk(whole, len + 1);
+    return;
+  }
+
   size_t sent = 0;
   bool multi = (len + 1) > BLE_CHUNK;
   while (sent < len) {
@@ -239,7 +274,7 @@ static void formatUid(const uint8_t *uid, uint8_t len, char *out) {
 static bool writeRaw(const uint8_t *data, size_t len) {
   // Returns what it managed to queue, so a short write means the buffer was
   // full and the caller should wait and try again.
-  return bleuart.write(data, len) == (int)len;
+  return bleuart.write(data, len) == len;
 }
 #else
 static bool writeRaw(const uint8_t *data, size_t len) {
@@ -252,6 +287,68 @@ static bool writeRaw(const uint8_t *data, size_t len) {
 static void say(const char *line) {
   if (linkUp()) sendLine(line);
   lastAnything = millis();
+}
+
+// --------------------------------------------------------------- the reader
+
+#if defined(BOARD_NRF52)
+// Nine clock pulses free a bus the PN532 has been left holding: a device cut
+// off partway through a byte keeps SDA low until it is clocked to the end of
+// it, and nothing else on the bus can get through while it does.
+static void clearBus() {
+  const uint8_t sda = pinFor(NRF_SDA), scl = pinFor(NRF_SCL);
+  Wire.end();
+  pinMode(sda, INPUT_PULLUP);
+  pinMode(scl, OUTPUT_S0D1);
+  for (uint8_t i = 0; i < 9; i++) {
+    digitalWrite(scl, LOW);
+    delayMicroseconds(5);
+    digitalWrite(scl, HIGH);
+    delayMicroseconds(5);
+  }
+  Wire.setPins(sda, scl);
+}
+#else
+static void clearBus() {}
+#endif
+
+#if defined(BOARD_NRF52)
+// A FreeRTOS timer, not the hardware watchdog: the hardware one cannot be
+// stopped once started, not even by a reset into the bootloader, and would
+// cut a firmware update off partway. The timer task outranks loop(), so it
+// still runs while loop() is stuck spinning on the bus.
+static SoftwareTimer stallTimer;
+
+// Left in GPREGRET2 just before a stall restart, which a soft reset keeps
+// and a power cycle clears, so the next boot can say what happened. Bit 0 is
+// clear on purpose: Nordic's later bootloaders read it as "skip the CRC".
+static const uint8_t STALL_MARK = 0xA4;
+static bool restartedAfterStall = false;
+
+static void checkStall(TimerHandle_t) {
+  if (millis() - loopAlive > STALL_MS) {
+    // Through the SoftDevice: once it is running it owns the POWER
+    // registers, and writing one directly faults the board.
+    sd_power_gpregret_clr(1, 0xFF);
+    sd_power_gpregret_set(1, STALL_MARK);
+    NVIC_SystemReset();
+  }
+}
+#endif
+
+// Brings the PN532 up from whatever state it is in. True if it answered.
+static bool startReader() {
+  Wire.begin();
+  nfc.begin();
+  uint32_t version = nfc.getFirmwareVersion();
+  if (version == 0) return false;
+  Serial.printf("PN532 firmware %d.%d\n", (version >> 16) & 0xFF,
+                (version >> 8) & 0xFF);
+  nfc.SAMConfig();
+  // Deliberately not setPassiveActivationRetries(): the library sends it and
+  // never reads the PN532's reply, and the next command trips over that
+  // reply and wedges the chip.
+  return true;
 }
 
 // ----------------------------------------------------------------------- setup
@@ -270,20 +367,30 @@ void setup() {
 
   pinMode(PIN_BUTTON, INPUT_PULLUP);
 
+#if defined(BOARD_NRF52)
+  // Read before startBle(), while the register is still ours to touch.
+  restartedAfterStall = NRF_POWER->GPREGRET2 == STALL_MARK;
+  NRF_POWER->GPREGRET2 = 0;
+#endif
   startBle();
   Serial.printf("BLE up as \"%s\"\n", UNIT_NAME);
 
   pinMode(LED_BUILTIN, OUTPUT);
-  Wire.begin();
-  nfc.begin();
-  uint32_t version = nfc.getFirmwareVersion();
-  readerOk = version != 0;
+  loopAlive = millis();
+#if defined(BOARD_NRF52)
+  // Started before the PN532 is touched, so a chip that hangs setup() is
+  // caught as well as one that hangs loop().
+  stallTimer.begin(1000, checkStall);
+  stallTimer.start();
+#endif
+  // Free the bus before the first transaction: resetting this board does not
+  // reset the PN532, which keeps its power, and one left partway through a
+  // byte holds SDA low.
+  clearBus();
+  readerOk = startReader();
+  lastRestartTry = millis();
   if (!readerOk) {
     Serial.println("PN532 not found. Check the DIP switches are set to I2C.");
-  } else {
-    Serial.printf("PN532 firmware %d.%d\n", (version >> 16) & 0xFF,
-                  (version >> 8) & 0xFF);
-    nfc.SAMConfig();
   }
 }
 
@@ -291,12 +398,23 @@ void setup() {
 
 void loop() {
   const uint32_t now = millis();
+  loopAlive = now;
 
   if (linkUp()) {
     if (!announced) {
-      char hello[64];
-      snprintf(hello, sizeof(hello), "V %s pn532 ble", UNIT_NAME);
+      // Short enough to go in one notification with its newline (see
+      // writeChunked), so it is never the line that arrives garbled.
+      char hello[32];
+      snprintf(hello, sizeof(hello), "V %s", UNIT_NAME);
       say(hello);
+#if defined(BOARD_NRF52)
+      // Said once, to whoever connects first after the restart, so a stall
+      // shows up in the wall's log instead of only as a gap in the readings.
+      if (restartedAfterStall) {
+        say("E restarted after a stall");
+        restartedAfterStall = false;
+      }
+#endif
       announced = true;
     }
   } else {
@@ -321,6 +439,13 @@ void loop() {
     if (now - lastComplaint >= 3000) {
       say("E pn532 not found, check the dip switches are set to i2c");
       lastComplaint = now;
+    }
+    // Keep trying: a reader that was only knocked out of step comes back.
+    if (now - lastRestartTry >= RESTART_RETRY_MS) {
+      lastRestartTry = now;
+      clearBus();
+      readerOk = startReader();
+      if (readerOk) digitalWrite(LED_BUILTIN, LOW);
     }
     if (now - lastAnything >= HEARTBEAT_MS) say("H");
     return;
